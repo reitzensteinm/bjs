@@ -13,6 +13,11 @@
 ;; Assert assert works!
 (assert 5 (+ 1 4))
 
+;; Check if, especially if arguments incomplete
+(assert 0 (if true 0 1))
+(assert 1 (if false 0 1))
+(assert nil (if false 1))
+
 ;; Bootstrap bare metal fn*, which evalutes its parameters in the calling
 ;; environment,
 (def fn* (obj* args env
@@ -97,5 +102,24 @@
         y (+ 4 3)]
     (+ x y)))
 
+;; Testing the Trace system is working
+(assert
+  14
+  (let [x 12]
+    (trace (+ x 2))))
+
+;; Bootstrap cond from if
 (def cond (obj* args env
-            (let [red (fn*)])))
+            (let [test (first (rest args))
+                  res (second (rest args))]
+              (if (empty? (rest args))
+                nil
+                (if (eval test env)
+                  (eval res env)
+                  (apply* cond (rest (rest (rest args)))
+                               env))))))
+
+(assert
+  nil
+  (cond (= 1 4) 1
+        (= 2 3) 3))

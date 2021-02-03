@@ -23,13 +23,13 @@ const msgRest = gen_message( "rest" );
 const msgWrite = gen_message( "write" );
 const msgEval = gen_message( "eval" );
 const msgPeek = gen_message( "peek" );
+const msgEmpty = gen_message( "empty?" );
 
 const kwApply = intern_keyword( "apply" );
 const kwAssoc = intern_keyword( "assoc" );
 const kwGet = intern_keyword( "get" );
 const kwEquals = intern_keyword( "equals" );
 const kwEval = intern_keyword( "eval" );
-
 
 function truthy( v ) {
 		return ( v != nil && !v.equals( make( boolean, false ) ).peek()  );
@@ -100,17 +100,21 @@ function make( f, d ) {
 	mp.write = function( e ) { return mp( msgWrite, e ) };
 	mp.peek = function( e ) { return mp( msgPeek, e  ) };
 	mp.eval = function( e ) { return mp( msgEval, e ) };
-
+	mp.empty = function( e ) { return mp( msgEmpty, e ) };
 	mp.get = function( v, e ) { return mp( make( vec, [ kwGet, v ] ), e ) };
 	mp.equals = function( v, e ) { return mp( make( vec, [ kwEquals, v ] ), e ) };
-	mp.apply = function( v, e ) { return mp( make( vec, [ kwApply, v ] ), e ) };
+	mp.apply = function( v, e ) {
+		console.log( "Applying! " + v.write() );
+		var newMessage = concat( make( vec, [ kwApply ]), v );
+		//console.log( make( vec, [ kwApply ].concat( v.peek() ) ).write() );
+		return mp( newMessage, e ) };
 
 	mp.assoc = function( k, v, e ) { return mp( make( vec, [ kwAssoc, k, v ] ), e ) };
 
 	mp.destructure = function( e ) {
 		var arr = [];
 		var omp = mp;
-		while ( omp.first() != nil ) {
+		while ( !truthy( omp.empty()) ) {
 			arr.push( omp.first() );
 			omp = omp.rest();
 		}
@@ -256,6 +260,8 @@ function array_list( t, data, args, env ) {
 
 	if ( args == msgFirst ) {
 		return data.length == 0 ? nil : data[ 0 ];
+	} else if ( args == msgEmpty ) {
+		return make( boolean, data.length == 0 );
 	} else if ( args == msgRest ) {
 		return make( t, data.slice( 1 ) );
 	} else if ( args.first() == kwEquals ) {
@@ -284,6 +290,24 @@ function vec( data, args, env ) {
 
 }
 
+function concat( va, vb ) {
+
+	var out = [];
+
+	while ( !truthy( va.empty() ) ) {
+		out.push( va.first() );
+		va = va.rest();
+	}
+
+	while ( !truthy( vb.empty() ) ) {
+		out.push( vb.first() );
+		vb = vb.rest();
+	}
+
+	return make( vec, out );
+
+}
+
 function code( data, args, env ) {
 
 	if ( args == msgEval ) {
@@ -309,6 +333,19 @@ function integer( data, args, env ) {
 
 }
 
+function trace( data, args, env ) {
+	if ( args == msgEval )
+		return make( trace, data );
+	else if  ( args == msgWrite )
+		return "trace";
+	else if ( args.first() == kwApply ) {
+		console.log( "Tracing " + args.write() + " " + env.write() );
+		var ret = args.rest().first().eval( env );
+		console.log( "ret: " + ret.write() );
+		return ret;
+	}
+}
+
 function if_ (data, args, env ) {
 
 	if ( args == msgEval ) {
@@ -317,11 +354,10 @@ function if_ (data, args, env ) {
 		return "if";
 	} else if ( args.first() == kwApply ) {
 		var [ _, i, a, b ] = args.destructure();
-
 		if ( truthy( i.eval( env ) ) ){
-			return a.eval( env );
+			return a == null ? nil : a.eval( env );
 		} else {
-			return b.eval (env );
+			return b == null ? nil : b.eval( env );
 		}
 
 	}
@@ -369,10 +405,11 @@ function closure( data, args, env ) {
 		return make( code, [ na, cenv, cargn, cenvn, cbody ] ).write();
 
 	} else {
-		//console.log( "executing " + data.write( ) + " " + args.write() );
+
 		var [ cenv, cargn, cenvn, cbody ] = data.destructure();
 		//console.log( "??" );
-
+//		console.log( cbody.write() );
+	//	console.log( "executing " + data.write( ) + " " + args.write() );
 
 
 		var final_env = cenv.assoc( cargn, args ).assoc( cenvn, env );
@@ -538,9 +575,13 @@ function test( ){
 															[ make( symbol, "rest" ), make( prim, function ( e, a,b) { return a.rest(); } ) ],
 															[ make( symbol, "assert" ), make( prim, function ( e, a,b) { var r = eq( a, b ); if ( !r ) throw "exception"; return make( string, "pass " + r ); } ) ],
 															[ make( symbol, "eval" ), make( prim, function ( e, a,b) { return a.eval( b ); } ) ],
+															[ make( symbol, "trace" ), make( trace, nil ) ],
+															[ make( symbol, "true" ), make( boolean, true ) ],
+															[ make( symbol, "false" ), make( boolean, false ) ],
+															[ make( symbol, "not"), make( prim, function ( e, a,b) { return make( boolean, !truthy( a ) ); } ) ],
+															[ make( symbol, "empty?"), make( prim, function ( e, a ) { return a.empty(); } ) ],
 															[ make( symbol, "if" ), make( if_, nil ) ],
-															[ make( symbol, "apply*" ), make( prim, function ( e, a,b) { return a.apply( b ); } ) ],
-															[ make( symbol, "trace" ), make( prim, function ( e, a ) { console.log( a.write() ); return a; } ) ],
+															[ make( symbol, "apply*" ), make( prim, function ( e, a, b, env) { console.log( b.write() ); return a.apply( b, env  ); } ) ],
 															[ make( symbol, "get" ), make( prim, function ( e, a,b) { return a.get( b ); } ) ],
 															[ make( symbol, "nil" ), nil ],
 															[ make( symbol, "assoc" ), make( prim, function ( e, a,b,c) { return a.assoc( b, c ); } ) ],
