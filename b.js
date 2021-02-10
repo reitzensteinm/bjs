@@ -24,12 +24,15 @@ const msgWrite = gen_message( "write" );
 const msgEval = gen_message( "eval" );
 const msgPeek = gen_message( "peek" );
 const msgEmpty = gen_message( "empty?" );
+const msgProvides = gen_message( "provides" );
+const msgDisassemble = gen_message( "disassemble" );
 
 const kwApply = intern_keyword( "apply" );
 const kwAssoc = intern_keyword( "assoc" );
 const kwGet = intern_keyword( "get" );
 const kwEquals = intern_keyword( "equals" );
 const kwEval = intern_keyword( "eval" );
+const kwSequence = intern_keyword( "sequence" );
 
 function truthy( v ) {
 		return ( v != nil && !v.equals( make( boolean, false ) ).peek()  );
@@ -60,6 +63,7 @@ var clc = 0;
 var call_stack = [];
 
 let globalEnv = make( hash_map, [] );
+let dynamicEnv = make( hash_map, [] );
 let primEnv = make( hash_map, [] );
 
 function make( f, d ) {
@@ -72,6 +76,7 @@ function make( f, d ) {
 							var ret = f( d, args, env );
 
 						} catch (err ) {
+							console.log( err );
 							for ( var c = 0; c < call_stack.length; c++ ) {
 								console.log( call_stack[ c ][ 0 ] + " " + call_stack[ c ][ 1 ].write() );
 							}
@@ -95,6 +100,8 @@ function make( f, d ) {
 						return ret;
 					}
 
+	mp.d = d;
+	mp.partial = function( e ) { return f == unbound };
 	mp.first = function( e ) { return mp( msgFirst, e ) };
 	mp.rest = function( e ) { return mp( msgRest, e ) };
 	mp.write = function( e ) { return mp( msgWrite, e ) };
@@ -103,8 +110,8 @@ function make( f, d ) {
 	mp.empty = function( e ) { return mp( msgEmpty, e ) };
 	mp.get = function( v, e ) { return mp( make( vec, [ kwGet, v ] ), e ) };
 	mp.equals = function( v, e ) { return mp( make( vec, [ kwEquals, v ] ), e ) };
+	mp.msg = function (v, e ) { return mp( v, e ) };
 	mp.apply = function( v, e ) {
-		console.log( "Applying! " + v.write() );
 		var newMessage = concat( make( vec, [ kwApply ]), v );
 		//console.log( make( vec, [ kwApply ].concat( v.peek() ) ).write() );
 		return mp( newMessage, e ) };
@@ -127,6 +134,8 @@ function make( f, d ) {
 
 }
 
+var emptyProvides = make( hash_map, [] );
+
 function boolean( data, args, env ) {
 
 	if ( args == msgEval ) {
@@ -137,6 +146,8 @@ function boolean( data, args, env ) {
 		return data;
 	} else if ( args.first() == kwEquals ) {
 		return make( boolean, data == args.rest().first().peek() );
+	}	else if ( eq( args, msgProvides, env ) ) {
+			return emptyProvides;
 	}
 
 }
@@ -157,6 +168,8 @@ function keyword ( data, args, env ) {
 		return make( keyword, data );
 	} else if ( args.first() == kwEquals ) {
 		return make( boolean, data == args.rest().first().peek() );
+	} else if ( eq( args, msgProvides, env ) ) {
+			return emptyProvides;
 	}
 
 }
@@ -192,7 +205,6 @@ function hash_map( data, args, env ) {
 		}
 
 		return nil;
-
 	} else if ( args.first() == kwAssoc ) {
 
 		var newd = [];
@@ -208,7 +220,17 @@ function hash_map( data, args, env ) {
 		return make( hash_map, newd );
 
 	} else if ( args.first() == kwEquals ) {
-		return make( boolean, make( hash_map, data ).write() == args.rest().first().write() );
+
+		var allContained = true;
+		var otherMap = args.rest().first();
+		for ( var c = 0; c < data.length; c++ ) {
+			if ( !eq( otherMap.get( data[ c ][ 0 ] ), data[ c ][ 1 ] ) ) {
+				allContained = false;
+			}
+		}
+		return make( boolean, allContained );
+	} else if ( eq( args, msgProvides, env ) ) {
+			return emptyProvides;
 	}
 
 }
@@ -219,7 +241,7 @@ function symbol ( data, args, env ) {
 			return data;
 		} else if ( args == msgEval ) {
 
-			var envs = [ env, globalEnv, primEnv ];
+			var envs = [ env, dynamicEnv, globalEnv, primEnv ];
 
 			for ( var c = 0; c < envs.length; c++ ) {
 					//Todo: not found?
@@ -237,6 +259,8 @@ function symbol ( data, args, env ) {
 			return data;
 		} else if ( args.first() == kwEquals ) {
 			return make( boolean, args.rest().first().peek() == data );
+		} else if ( eq( args, msgProvides, env ) ) {
+				return emptyProvides;
 		}
 
 }
@@ -266,6 +290,8 @@ function array_list( t, data, args, env ) {
 		return make( t, data.slice( 1 ) );
 	} else if ( args.first() == kwEquals ) {
 		return make( boolean, make( t, data ).write() == args.rest().first().write() );
+	} else if ( eq( args, msgProvides, env ) ) {
+			return make( hash_map, [ [ kwSequence, kwSequence ] ] );
 	}
 
 }
@@ -329,6 +355,8 @@ function integer( data, args, env ) {
 		return "" + data;
 	} else if ( args.first() == kwEquals ) {
 		return make( boolean, ( args.rest().first().peek() ) == data );
+	} else if ( eq( args, msgProvides, env ) ) {
+			return emptyProvides;
 	}
 
 }
@@ -354,7 +382,13 @@ function if_ (data, args, env ) {
 		return "if";
 	} else if ( args.first() == kwApply ) {
 		var [ _, i, a, b ] = args.destructure();
-		if ( truthy( i.eval( env ) ) ){
+		var test = i.eval( env );
+
+		if ( test.partial() ){
+			var wr = make( code, [ make( symbol, "if" ), test, a.eval( env ), b.eval( env ) ] );
+			//wr = make( code, [ make( symbol, "eval" ), wr, env ] );
+			return make( unbound, wr );
+		} else if ( truthy( test ) ){
 			return a == null ? nil : a.eval( env );
 		} else {
 			return b == null ? nil : b.eval( env );
@@ -369,21 +403,67 @@ function prim( data, args, env ) {
 	if ( args == msgEval ) {
 		return make( prim, data );
 	} else if ( args == msgWrite ) {
-		return "primitive";
-	} else if ( args( msgFirst ) == kwApply ) {
+		return data.primName != null ? data.primName : "primitive";
+	} else if ( eq( args.first(), kwApply ) ) {
 
 		var nargs = args.destructure();
 		var cargs = [];
+		var partial = [ make( prim, data ) ];
 
 		cargs.push( env );
+
+		var anyUnbound = false;
+
 		for ( var c = 1; c < nargs.length; c++ ) {
-			cargs.push( nargs[ c ].eval( env ) );
+			var ev = nargs[ c ].eval( env );
+
+			if ( ev.partial() ) {
+
+
+				if ( data.mask != null ) {
+					if ( data.mask[ c - 1 ] ) {
+						anyUnbound = true;
+						//console.log( "mask unbound " + c  + ev.write() + "  " + data.primName );
+					}
+				} else {
+					anyUnbound = true;
+					//console.log( "normal unbound" );
+				}
+			}
+
+			partial.push( ev );
+			cargs.push( ev );
+		}
+
+
+		if ( anyUnbound ) {
+			return make( unbound, make( code, partial ) );
 		}
 
 		return data.apply( null, cargs );
 
+	} else if ( eq( args, msgProvides, env ) ) {
+			return emptyProvides;
 	}
 
+}
+
+function dynamic( data, args, env ) {
+	if ( args == msgEval )
+		return make( dynamic, data );
+	else if  ( args == msgWrite )
+		return "dyn";
+	else if ( args.first() == kwApply ) {
+
+		var [ a, b, c, d ] = args.destructure();
+		var old = dynamicEnv;
+		dynamicEnv = b.eval( env );
+		//console.log( "Dyn env: " + dynamicEnv.write() );
+		var res = c.eval( env );
+
+		dynamicEnv = old;
+		return res;
+	}
 }
 
 
@@ -397,9 +477,23 @@ function obj( data, args, env ) {
 
 }
 
+function unbound( data, args, env ) {
+
+	if ( args == msgEval ) {
+		return make( unbound, data );
+	} else if ( args == msgWrite ) {
+		return data.write();
+	} else if ( args.first() == kwApply ) {
+		return make( unbound, make( code, concat( make( code, [data] ), args.rest().eval(env) ).d ) );
+	}
+
+}
+
 function closure( data, args, env ) {
 
-	if ( args == msgWrite ) {
+	if ( eq( args, msgDisassemble, env ) ) {
+		return data;
+	} else if ( eq( args, msgWrite, env ) ) {
 		var [ cenv, cargn, cenvn, cbody ] = data.destructure();
 		var na = make( symbol, "clo*" );
 		return make( code, [ na, cenv, cargn, cenvn, cbody ] ).write();
@@ -553,6 +647,15 @@ function grab( f ) {
 
 }
 
+function buildPrim( name, f, mask ) {
+
+	f.primName = name;
+	f.mask = mask;
+	return [ make( symbol, name), make( prim, f ) ]
+
+
+}
+
 function test( ){
 
 /*
@@ -569,24 +672,33 @@ function test( ){
 	var prog = "";
 
 	primEnv = make( hash_map, [
-															[ make( symbol, "+" ), make( prim, function ( e, a,b) { return make( integer, a.peek() + b.peek() ); } ) ],
+															buildPrim( "+", function ( e, a,b) { return make( integer, a.peek() + b.peek() ); }),
 															[ make( symbol, "obj*" ), make( obj, nil ) ],
-															[ make( symbol, "first" ), make( prim, function ( e, a,b) { return a.first(); } ) ],
-															[ make( symbol, "rest" ), make( prim, function ( e, a,b) { return a.rest(); } ) ],
-															[ make( symbol, "assert" ), make( prim, function ( e, a,b) { var r = eq( a, b ); if ( !r ) throw "exception"; return make( string, "pass " + r ); } ) ],
-															[ make( symbol, "eval" ), make( prim, function ( e, a,b) { return a.eval( b ); } ) ],
+															buildPrim( "first",  function ( e, a,b) { return a.first(); }, [ true ] ),
+															buildPrim( "rest",  function ( e, a,b) { return a.rest(); }),
+															buildPrim( "assert", function ( e, a,b) { var r = eq( a, b ); if ( !r ) throw "exception"; return make( string, "pass " + r ); }),
+															buildPrim( "eval", function ( e, a,b) { return a.eval( b ); }),
 															[ make( symbol, "trace" ), make( trace, nil ) ],
+															buildPrim( "unbound", function (e, a ) { return make( unbound, a ); }  ),
+															buildPrim( "read", function (e, a ) { return read( a.d ); }, [false]),
+															buildPrim( "write", function (e, a ) { return make( string, a.write() ); }, [false]  ),
+															[ make( symbol, "dyn*" ),  make( dynamic, nil ) ],
 															[ make( symbol, "true" ), make( boolean, true ) ],
 															[ make( symbol, "false" ), make( boolean, false ) ],
-															[ make( symbol, "not"), make( prim, function ( e, a,b) { return make( boolean, !truthy( a ) ); } ) ],
-															[ make( symbol, "empty?"), make( prim, function ( e, a ) { return a.empty(); } ) ],
+
+															//[ make( symbol, "read" ),  function ( e, a,b) { read( a ) } ],
+
+															buildPrim( "not",  function ( e, a,b) { return make( boolean, !truthy( a ) ); } ),
+															buildPrim( "empty?",  function ( e, a ) { return a.empty(); } ),
 															[ make( symbol, "if" ), make( if_, nil ) ],
-															[ make( symbol, "apply*" ), make( prim, function ( e, a, b, env) { console.log( b.write() ); return a.apply( b, env  ); } ) ],
-															[ make( symbol, "get" ), make( prim, function ( e, a,b) { return a.get( b ); } ) ],
+															buildPrim( "apply*", function ( e, a, b, env) { return a.apply( b, env  ); }, [true,false] ),
+															buildPrim( "msg*", function ( e, a, b, env) { return a.msg( b, env ); }),
+															buildPrim( "get",  function ( e, a,b) { return a.get( b ); } ),
 															[ make( symbol, "nil" ), nil ],
-															[ make( symbol, "assoc" ), make( prim, function ( e, a,b,c) { return a.assoc( b, c ); } ) ],
-															[ make( symbol, "symbol" ), make( prim, function (e, a,b) { return make( symbol, a.peek() ) } ) ],
-															[ make( symbol, "=" ), make( prim, function (e,a,b) { return make( boolean, eq( a, b ) ); } ) ],
+															buildPrim( "assoc",  function ( e, a,b,c) { return a.assoc( b, c ); }, [true,true,false] ),
+															buildPrim( "symbol", function (e, a,b) { return make( symbol, a.peek() ) }),
+															buildPrim( "=",function (e,a,b) { return make( boolean, eq( a, b ) ); } ),
+
 														]);
 
 	function build_env() {
@@ -629,7 +741,7 @@ function test( ){
 	}
 
 
-	console.log( env.write() );
+//	console.log( env.write() );
 
 	//console.log( read( "[" + lib.replace( "\r\n", "" ) + "]" ).rest().first().write() );
 

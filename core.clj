@@ -39,6 +39,8 @@
 (def fourth (fn* args
               (first (rest (rest (rest (first args)))))))
 
+(def fifth (fn* args
+              (first (rest (rest (rest (rest (first args))))))))
 
 (assert
   5
@@ -123,3 +125,133 @@
   nil
   (cond (= 1 4) 1
         (= 2 3) 3))
+
+;; Add provides, which messages an object to query its interfaces
+;; The interface list is then reduced through (cumbersomely)
+
+(def provides? (fn* args
+                 (let [obj (first args)
+                       interface (second args)
+                       abilities (msg* obj [:provides])]
+                   (not (= nil (get abilities interface))))))
+
+(assert true
+  (provides? [1 2 3] :sequence))
+
+(assert false
+  (provides? 1 :sequence))
+
+;; Upgrade inner-bind*, which at this moment of execution binds symbol => val
+;; Enable [sym sym] => [val val]
+
+(def inner-bind-exp*
+  (fn* args
+    (let [env (first args)
+          syms (second args)
+          vals (third args)]
+      (cond
+        (not (provides? syms :sequence))
+        (assoc env syms vals)
+
+        (empty? syms)
+        env
+
+        :default
+        (inner-bind-exp* (assoc env (first syms) (first vals))
+                         (rest syms) (rest vals))))))
+
+(assert
+  (quote {a 1 b 2 c 3})
+  (inner-bind-exp* {} (quote [a b c]) [1 2 3]))
+
+(assert
+  (quote {a 1})
+  (inner-bind-exp* {} (quote a) 1))
+
+(def realize (fn* args
+               (read (write (first args)))))
+
+(def dyn-test (fn* args dyn-bound))
+
+(assert
+  :dyn
+  (dyn* {(quote dyn-bound) :dyn}
+        (dyn-test)))
+
+;; We don't have or yet. Are you kidding me!?
+(def zipmap (fn* args
+              (let [ks (first args)
+                    vs (second args)]
+                (cond
+                  (empty? ks)
+                  {}
+
+                  (empty? vs)
+                  {}
+
+                  :default
+                  (assoc (zipmap (rest ks) (rest vs))
+                         (first ks) (first vs))))))
+
+(assert
+  (quote {a 1 b 2})
+  (zipmap (quote [a b]) [1 2]))
+
+(def data (msg* inner-bind-exp* [:disassemble]))
+
+;; Optimize partially evalutes code, but stops at specified symbols
+;; The code is read + written in order to prevent the unbound symbols
+;; impacting the compiled code
+(def optimize (fn* args
+                (let [d (first args)
+                      env (first d)
+                      code (fourth d)
+                      stop-symbols (second args)
+                      eval-env (assoc (assoc env (quote argf) (unbound (quote argf)))
+                                      (quote envf) (unbound (quote envf)))]
+
+                  (read (write
+                          (dyn* stop-symbols
+                                (eval code
+                                      eval-env)))))))
+
+
+
+(def inner-bind-exp* (apply* obj*
+                       [(quote argf) (quote envf)
+                        (optimize data {(quote inner-bind-exp*) (unbound (quote inner-bind-exp*))})]
+                       {}))
+
+
+(def inner-bind* inner-bind-exp*)
+
+;; By substituting our compiled inner-bind-exp* for inner-bind*, we now
+;; have destructuring let!
+
+(assert
+  [1 2]
+  (let [[a b c] [1 2 3]
+        e [a b]]
+    e))
+
+(def fn (obj* args env
+           (obj* argf envf
+             (eval (first (rest (rest args)))
+               (inner-bind* env (first (rest args)) (eval (rest argf) envf))))))
+
+(assert
+  7
+  ((fn [x] x) 7))
+
+
+(def defn (obj* argf envf
+            (let [[a b c d] argf]
+              {:defines {b (apply* fn [c d] envf)}})))
+
+(defn add-test [x]
+  (+ x 1))
+
+(assert 6
+  (add-test 5))
+
+;; Todo - make reading (clo* ) work, necessary for optimization
