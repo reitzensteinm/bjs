@@ -281,6 +281,13 @@ inner-bind-ez*
          {})
 
 
+(assert
+  5
+  ((read (write (fn [x] x)))
+   5))
+
+
+((read (write (fn [x] x))) 5)
 
 
 (optimize (msg* defn [:disassemble])
@@ -293,4 +300,158 @@ inner-bind-ez*
 
 (defne* symtest [x] (+ x 1))
 
-(symtest 2)})
+(symtest 2)
+
+(clo* {} argf envf (first argf))
+
+(obj* argf envf (eval (quote (first argf))
+                      {}))
+
+(def od     (quote (eval
+                     (quote
+                      (eval
+                       (quote
+                        (eval
+                         (first (rest (rest args)))
+                         (inner-bind*
+                          env
+                          (first (rest args))
+                          (eval (rest argf) envf))))
+                       {(quote args) (quote
+                                      [:apply
+                                       (first (rest (rest argfo)))
+                                       (first
+                                        (rest (rest (rest argfo))))]),
+                        (quote env) envfo}))
+                     {(quote argfo) (quote
+                                     [:apply symtest [x] (+ x 1)]),
+                      (quote envfo) (quote {})})))
+
+(optimize)
+
+
+
+(def st
+ (clo*
+   {argfo [:apply symtest x (+ x 1)], envfo {}}
+   argf
+   envf
+   (eval
+    (quote
+      (eval
+       (first (rest (rest args)))
+       (assoc
+        env
+        (first (rest args))
+        (eval (rest argf) envf))))
+    {(quote args) (quote
+                   [:apply
+                    (first (rest (rest argfo)))
+                    (first
+                     (rest (rest (rest argfo))))]),
+     (quote env) envfo,
+     (quote argf) argf,
+     (quote envf) envf})))
+
+
+
+;; Todo - strings in reader!
+
+;; Check that reading (obj*) spceial forms works
+;(assert
+;  1
+;  ((read (write (quote (clo* {} argf envf 1))))
+;   2))
+
+
+(optimize (msg* defn [:disassemble])
+          {})
+
+
+
+(def defnl (obj* argf envf
+             (let [[a b c d] argf]
+               {:defines {b (apply* fn* [c d] envf)}})))
+
+(def defne* (apply* obj*
+              [(quote argfo) (quote envfo)
+               (optimize (msg* defnl [:disassemble]) {})]
+              {}))
+
+(defne* symtest x (+ x 1))
+
+(symtest 1)
+
+
+
+  ;; Todo - doesn't appear to work!
+  ;; Reason: (clo* ) spit out with a partial evaluation doens't work
+  ;; Solution - (clo* ) written out as object only
+
+
+
+
+
+
+;(symtest 2)
+
+;((clo* {} argf envf 1) 2)
+;;((eval (read (write))
+  ;;     {})
+ ;2)
+
+;; todo! serialized closures respect unbound variables
+;; Do we spit out unbound variables as is?
+
+;; Todo: caching
+;(def x 77)
+;(def nf (let [x (unbound (quote x)) y 22 z (+ x 2)] (obj* argf envf [x y (second argf)])))
+;(nf 88)
+;((obj* argf envf (eval (quote [x y (second argf)]) {(quote x) x (quote y) (quote 22) (quote z) (+ x 2) (quote argf) argf (quote envf) envf}))
+; 88)
+
+:uncache
+(quote
+  (eval
+   (first (rest (rest args)))
+   (assoc
+    env
+    (first (rest args))
+    (eval (rest argf) envf))))
+
+(def st
+ (quote
+   (clo*
+     {argfo [:apply symtest x (+ (first x) 1)] envfo {}}
+     argf
+     envf
+     (eval
+      (quote
+        (eval
+         (first (rest (rest args)))
+         (assoc
+          env
+          (first (rest args))
+          (eval (rest argf) envf))))
+      {(quote args)
+       [:apply
+        (first (rest (rest argfo)))
+        (first
+         (rest (rest (rest argfo))))]
+       (quote env) envfo,
+       (quote argf) argf,
+       (quote envf) envf}))))
+
+
+(st 1)
+
+(let [x (unbound (quote x))
+      y (+ x 1)]
+  (apply* fn* [x] {})))
+
+;; Todo - partial? for lists
+
+;; Todo: why is
+
+
+;((obj* argf envf (eval (quote x) {x 5})))

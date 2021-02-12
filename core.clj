@@ -207,8 +207,8 @@
                       env (first d)
                       code (fourth d)
                       stop-symbols (second args)
-                      eval-env (assoc (assoc env (quote argf) (unbound (quote argf)))
-                                      (quote envf) (unbound (quote envf)))]
+                      eval-env (assoc (assoc env (quote argf) (unbound (quote argfo)))
+                                      (quote envf) (unbound (quote envfo)))]
 
                   (read (write
                           (dyn* stop-symbols
@@ -218,7 +218,7 @@
 
 
 (def inner-bind-exp* (apply* obj*
-                       [(quote argf) (quote envf)
+                       [(quote argfo) (quote envfo)
                         (optimize data {(quote inner-bind-exp*) (unbound (quote inner-bind-exp*))})]
                        {}))
 
@@ -253,5 +253,3 @@
 
 (assert 6
   (add-test 5))
-
-;; Todo - make reading (clo* ) work, necessary for optimization
