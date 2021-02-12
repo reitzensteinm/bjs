@@ -1,3 +1,8 @@
+(peval (quote (bind-to-env* x)) {(quote x) (unbound (quote x))})
+
+:halt
+
+
 
 (def test-unbound
   (obj* argf envf
@@ -43,18 +48,3 @@
 ;; IT VERKS
 ;; What do I do from here, hahaha
 ;; We are not feeling nearly as clever as we did a short time ago
-
-(def d (quote (obj*
-                argf
-                envf
-                (eval
-                 (quote
-                  (eval
-                   (first (rest (rest args)))
-                   (assoc env (first (rest args)) (eval (rest argf) envf))))
-                 {(quote args) [:apply (quote args) x],
-                  (quote env) (quote {}),
-                  (quote argf) argf,
-                  (quote envf) envf}))))
-
-((eval d {(quote x) 2}))

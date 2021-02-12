@@ -898,6 +898,10 @@ function test( ){
 
 				var tk = lib.first();
 
+				if ( tk.write() == ":halt" ) {
+					return;
+				}
+
 				key += tk.write();
 
 				var executed = false;
