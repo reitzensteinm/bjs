@@ -2,6 +2,8 @@ var fs = require( 'fs' );
 var crypto = require('crypto');
 
 
+var experimentalPartial = false;
+
 //const redis = require("redis");
 //const client = redis.createClient();
 
@@ -31,6 +33,7 @@ const msgEmpty = gen_message( "empty?" );
 const msgProvides = gen_message( "provides" );
 const msgDisassemble = gen_message( "disassemble" );
 const msgPartial = gen_message( "partial" );
+const msgPartialWrite = gen_message( "partial-write" );
 
 const kwApply = intern_keyword( "apply" );
 const kwAssoc = intern_keyword( "assoc" );
@@ -38,6 +41,7 @@ const kwGet = intern_keyword( "get" );
 const kwEquals = intern_keyword( "equals" );
 const kwEval = intern_keyword( "eval" );
 const kwSequence = intern_keyword( "sequence" );
+const kwPartialWrite = intern_keyword( "partial-write" );
 
 function truthy( v ) {
 		return ( v != nil && !v.equals( make( boolean, false ) ).peek()  );
@@ -73,6 +77,21 @@ let primEnv = make( hash_map, [] );
 
 function make( f, d ) {
 
+
+	if ( f == vec ) {
+
+		for ( var c = 0; c < d.length; c++ ) {
+			if ( d[ c ] == null ) {
+				console.log( "Null array ");
+				for ( var oo = 0; oo < d.length; oo++ ) {
+					console.log( d[ oo ] );
+				}
+			}
+		}
+	}
+
+
+
 	var mp = function clo ( args, env ) {
 						clc++;
 						call_stack.push( [f.name,args] );
@@ -96,6 +115,7 @@ function make( f, d ) {
 							}
 							if ( args != msgPeek ) {
 								console.log( "Not supported " + args.write() + " " + f.name );
+								console.log( args == msgFirst );
 								console.log( mp.write() );
 								for ( var c = 0; c < call_stack.length; c++ ) {
 									console.log( call_stack[ c ][ 0 ] + " " + call_stack[ c ][ 1 ].write() );
@@ -109,12 +129,43 @@ function make( f, d ) {
 						call_stack.pop();
 						return ret;
 					}
+
+
+	mp.f = f;
   mp.partialMark = false;
+
+	if ( f == unbound ) {
+		mp.partialMark = true;
+	} else if ( f == vec ) {
+		for ( var c = 0; c < d.length; c++ ) {
+			mp.partialMark = mp.partialMark || d[ c ].partialMark;
+		}
+	} else if ( f == hash_map ) {
+		for ( var c = 0; c < d.length; c++ ) {
+			mp.partialMark = mp.partialMark || ( d[ c ][ 0 ].partialMark || d[ c ][ 1 ].partialMark );
+		}
+	}
 	mp.d = d;
-	mp.partial = function( e ) { return f == unbound || mp.partialMark || ( f == vec && truthy( mp( msgPartial, e ) ) ) };// return truthy( mp( msgPartial, e ) ) };
+	// || mp.partialMark || ( f == hash_map && truthy( mp( msgPartial, e ) ) );
+	//|| mp.partialMark || ( f == vec && truthy( mp( msgPartial, e ) )
+	mp.partial = function( e ) { return f == unbound; };// return truthy( mp( msgPartial, e ) ) };
 	mp.first = function( e ) { return mp( msgFirst, e ) };
 	mp.rest = function( e ) { return mp( msgRest, e ) };
 	mp.write = function( e ) { return mp( msgWrite, e ) };
+	mp.pwrite = function( e ) {
+
+		//console.log( "Starting partial write " + f.name );
+		if ( f == closure ||  mp( msgProvides ).get( kwPartialWrite ) != nil ) {
+//			console.log( "blah ") ;
+			var res = mp( msgPartialWrite, e );
+	//		console.log( "provided: " + res );
+			return res;
+		}
+		var wr = mp.write( e );
+//		console.log( "Partial write " + wr );
+		return wr;
+
+	};
 	mp.peek = function( e ) { return mp( msgPeek, e  ) };
 	mp.eval = function( e ) { return mp( msgEval, e ) };
 	mp.empty = function( e ) { return mp( msgEmpty, e ) };
@@ -206,6 +257,7 @@ function hash_map( data, args, env ) {
 			nd.push( [ k, v ] );
 		}
 
+		/*
 		if ( inPartial )
 			if ( anyPartial ) {
 				for ( var c = 0; c < data.length; c++ ) {
@@ -216,6 +268,7 @@ function hash_map( data, args, env ) {
 				}
 			}
 
+		*/
 		return make( hash_map, nd );
 	} else if ( args == msgWrite ) {
 		var outs = "{";
@@ -263,13 +316,34 @@ function hash_map( data, args, env ) {
 		}
 		return make( boolean, allContained );
 	} else if ( eq( args, msgProvides, env ) ) {
-			return emptyProvides;
+			return make( hash_map, [ [kwPartialWrite, kwPartialWrite ] ] );
 	} else if ( eq( args, msgPartial, env ) ) {
-		if ( inPartial )
-			for ( var c = 0; c < data.length; c++ )
-				if ( data[ c ][ 0 ].partial() || data[ c ][ 1 ].partial( ) )
-					make( boolean, true );
+
+		for ( var c = 0; c < data.length; c++ )
+			if ( data[ c ][ 0 ].partial() || data[ c ][ 1 ].partial( ) ) {
+				return make( boolean, true );
+			}
 		return make( boolean, false );
+	} else if ( eq( args, msgPartialWrite, env ) ) {
+		var outs = "{";
+
+		function wr( d ) {
+				if ( truthy( d( msgPartial ) ) ) {
+					return d.pwrite();
+				} else {
+					return quote( d ).write();
+				}
+		}
+
+		for ( var c = 0; c < data.length; c++ ) {
+			outs+= wr( data[ c ][ 0 ] ) + " " + wr( data[ c ][ 1 ] );
+
+			if ( c < data.length - 1 )
+				outs += " ";
+		}
+
+		return outs + "}";
+
 	}
 
 }
@@ -310,13 +384,28 @@ function write_with( data, sep ) {
 
 	var sout = sep[ 0 ];
 
+
+	try{
 	for ( var c = 0; c < data.length; c++ ) {
+
 		sout += data[ c ]( msgWrite );
 		if ( c < data.length - 1 )
 			sout += " ";
 
 	}
 
+} catch {
+	for ( var c = 0; c < data.length; c++ ) {
+
+		console.log( "d " + data[ c ] +  " " + typeof( data[ c ] ) );
+
+		if ( data[ c ] != null ) {
+			console.log( data[ c ].write() );
+		}
+	}
+	return "err";
+
+}
 	return sout + sep[ 1 ];
 
 }
@@ -332,13 +421,14 @@ function array_list( t, data, args, env ) {
 	} else if ( args.first() == kwEquals ) {
 		return make( boolean, make( t, data ).write() == args.rest().first().write() );
 	} else if ( eq( args, msgProvides, env ) ) {
-			return make( hash_map, [ [ kwSequence, kwSequence ] ] );
+			return make( hash_map, [ [ kwSequence, kwSequence ], [ kwPartialWrite, kwPartialWrite ] ] );
 	} else if ( eq( args, msgPartial, env ) ) {
 			for ( var c = 0; c < data.length; c++ )
 				if ( data[ c ].partial() )
 					return make( boolean, true );
 			return make( boolean, false );
 	}
+	return null;
 
 }
 
@@ -359,6 +449,7 @@ function vec( data, args, env ) {
 			}
 		}
 
+		/*
 		if ( inPartial )
 			if ( unbound ) {
 				for ( var c = 0; c < outa.length; c++ ) {
@@ -369,13 +460,44 @@ function vec( data, args, env ) {
 
 				//return make( unbound, make( vec, outa) );
 			}
+		*/
 
 		return make( vec, outa );
 
 	} else if ( args == msgWrite ) {
 		return write_with( data, "[]" );
+
 	} else {
-		return array_list( vec, data, args, env );
+		var al = array_list( vec, data, args, env );
+		if ( al != null ) {
+			return al;
+		}
+	}
+
+	if ( eq( args, msgPartialWrite, env ) ) {
+
+			//console.log( "Writing partial write" );
+			var outs = "[";
+
+			function wr( d ) {
+	//			console.log( truthy( d( msgPartial ) ));
+				if ( truthy( d( msgPartial ) ) ) {
+					return d.pwrite();
+				} else {
+					return quote( d ).write();
+				}
+			}
+
+			for ( var c = 0; c < data.length; c++ ) {
+//				console.log( "writing: " + data[ c].write() );
+				outs+= wr( data[ c ] );
+
+				if ( c < data.length - 1 )
+					outs += " ";
+			}
+
+			return outs + "]";
+
 	}
 
 }
@@ -442,6 +564,13 @@ function trace( data, args, env ) {
 	}
 }
 
+function stripPartial( d ) {
+	if ( d.partial() ) {
+		return d.d;
+	}
+	return d;
+
+}
 function if_ (data, args, env ) {
 
 	if ( args == msgEval ) {
@@ -453,7 +582,7 @@ function if_ (data, args, env ) {
 		var test = i.eval( env );
 
 		if ( test.partial() ){
-			var wr = make( code, [ make( symbol, "if" ), test, a.eval( env ), b.eval( env ) ] );
+			var wr = make( code, [ make( symbol, "if" ), stripPartial( test ), stripPartial( a.eval( env ) ), stripPartial( b.eval( env ) ) ] );
 			//wr = make( code, [ make( symbol, "eval" ), wr, env ] );
 			return make( unbound, wr );
 		} else if ( truthy( test ) ){
@@ -486,27 +615,36 @@ function prim( data, args, env ) {
 
 		for ( var c = 1; c < nargs.length; c++ ) {
 			var ev = nargs[ c ].eval( env );
-
+//			console.log( nargs[ c ].write() + ev.write() + " " + ev.partial( ) + " " + ev.f.name );
 			if ( ev.partial() ) {
+
 
 
 				if ( data.mask != null ) {
 					if ( data.mask[ c - 1 ] ) {
+					//	ev = ev.d;
 						anyUnbound = true;
 						//console.log( "mask unbound " + c  + ev.write() + "  " + data.primName );
 					}
 				} else {
+				//	ev = ev.d;
 					anyUnbound = true;
 					//console.log( "normal unbound" );
 				}
+
+
 			}
 
 			partial.push( ev );
 			cargs.push( ev );
 		}
 
+//		console.log( "ip " + inPartial + " " + anyUnbound );
 
 		if ( anyUnbound && inPartial ) {
+			for ( var c = 0; c < partial.length; c++ ) {
+				partial [c ] = stripPartial( partial[ c] );
+			}
 			return make( unbound, make( code, partial ) );
 		}
 
@@ -549,6 +687,8 @@ function obj( data, args, env ) {
 		return make( closure, make( vec, [ env, args.rest().first(), args.rest().rest().first(), args.rest().rest().rest().first() ] ) );
 	} else if ( eq( args, msgPartial, env ) ) {
 			return make( boolean, false );
+	} else if ( eq( args, msgProvides, env ) ) {
+		return emptyProvides;
 	}
 
 }
@@ -558,11 +698,19 @@ function unbound( data, args, env ) {
 	if ( args == msgEval ) {
 		return make( unbound, data );
 	} else if ( args == msgWrite ) {
-		return data.write();
+		return "(par* " + data.write() + ")";
 	} else if ( args.first() == kwApply ) {
-		return make( unbound, make( code, concat( make( code, [data] ), args.rest().eval(env) ).d ) );
+		var ar = args.rest().eval(env);
+		for ( var c = 0; c < ar.d.length; c++ ) {
+			ar.d[ c ] = stripPartial( ar.d[ c ] );
+		}
+		return make( unbound, make( code, concat( make( code, [data] ), ar ).d ) );
 	} else if ( eq( args, msgPartial, env ) ) {
 			return make( boolean, true );
+	} else if ( eq( args, msgProvides, env ) ) {
+		return make( hash_map, [ [kwPartialWrite, kwPartialWrite ] ] );
+	} else if ( eq( args, msgPartialWrite, env ) ) {
+		return data.write();
 	}
 
 }
@@ -592,11 +740,39 @@ function closure( data, args, env ) {
 
 	if ( eq( args, msgDisassemble, env ) ) {
 		return data;
+
+	} else if ( eq( args, msgPartial, env ) ) {
+			var [ cenv, cargn, cenvn, cbody ] = data.destructure();
+			return cenv( msgPartial, env );
+			//return make( boolean, cenv.partial() );
+
+	} else if ( eq( args, msgPartialWrite, env ) ) {
+
+		var [ cenv, cargn, cenvn, cbody ] = data.destructure();
+		var na = make( symbol, "obj*" );
+
+		var nenv = read( cenv.pwrite() );
+		nenv = nenv.assoc( quote( cargn ), cargn );
+		nenv = nenv.assoc( quote( cenvn ), cenvn );
+
+		var body = make( code, [ make( symbol, "eval" ), quote( cbody ), nenv ] );
+
+/*
+		console.log( "***" );
+		console.log( cenv.pwrite() );
+		console.log( "******" );
+		console.log( make( hash_map, [] ).write() );
+		console.log( "**");
+*/
+
+		return make( code, [ na, cargn, cenvn, body ] ).write();
+
+
 	} else if ( eq( args, msgWrite, env ) ) {
 		var [ cenv, cargn, cenvn, cbody ] = data.destructure();
 
-		var na = make( symbol, "obj*" );
 
+/*
 		var body = make( code, [ make( symbol, "quote" ), cbody ] );
 
 		var nenv = make( hash_map, [] );
@@ -620,9 +796,11 @@ function closure( data, args, env ) {
 
 		body = make( code, [ make( symbol, "eval" ), body, nenv ]);
 
-		if ( anyPartial )
-			return make( code, [ na, cargn, cenvn, body ] ).write();
-
+		if ( anyPartial ) {
+			console.log( "Writing partial ");
+			return make( code, [ na, cargn, cenvn, cbody ] ).write();
+		}
+		*/
 
 		var na = make( symbol, "clo*" );
 		return make( code, [ na, cenv, cargn, cenvn, cbody ] ).write();
@@ -630,6 +808,7 @@ function closure( data, args, env ) {
 	} else {
 
 		var [ cenv, cargn, cenvn, cbody ] = data.destructure();
+		//console.log( data.write() + " " + args.write() +  " " + args.partial() + " " + args.rest().first().partial() + " " + env.write() );
 		//console.log( "??" );
 //		console.log( cbody.write() );
 	//	console.log( "executing " + data.write( ) + " " + args.write() );
@@ -823,17 +1002,6 @@ function cacheVal( key, cf ) {
 
 function test( ){
 
-/*
-	var ll = 0;
-	for ( var c = 0; c < 20000000; c++ ) {
-		var js = JSON.parse( '{"hi": 123, "blah": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 ] }' );
-		ll+=js.length;
-
-	}
-
-	return;
-*/
-
 	var prog = "";
 
 	primEnv = make( hash_map, [
@@ -844,8 +1012,8 @@ function test( ){
 															buildPrim( "rest",  function ( e, a,b) { return a.rest(); }),
 															buildPrim( "assert", function ( e, a,b) { var r = eq( a, b ); if ( !r ) throw "exception"; return make( string, "pass " + r ); }),
 															buildPrim( "eval", function ( e, a,b) { return a.eval( b ); }),
-															buildPrim( "peval", function ( e, a,b) { var oldPartial = inPartial; inPartial = true; var res = a.eval( b ); inPartial = oldPartial; return res; } ),
-															buildPrim( "partialq", function ( e, a ) { return make( boolean, a.partial() ); } ),
+															buildPrim( "peval", function ( e, a,b) { var oldPartial = inPartial; inPartial = true; var res = a.eval( b ); inPartial = oldPartial; return read( res.pwrite() ); } ),
+															buildPrim( "partialq", function ( e, a ) { return make( boolean, a.partial() ); }, [false] ),
 															[ make( symbol, "trace" ), make( trace, nil ) ],
 															buildPrim( "unbound", function (e, a ) { return make( unbound, a ); }  ),
 															buildPrim( "read", function (e, a ) { /*console.log( "reading: " + a.d );*/ return read( a.d ); }, [false]),
@@ -885,8 +1053,7 @@ function test( ){
 	}
 
 	var key = ignoreMods ? "" : fs.readFileSync( "b.js", 'utf8' );
-	var caching = true;
-
+	var caching = false;
 
 	function parseFile( path ) {
 
@@ -944,8 +1111,11 @@ function test( ){
 
 	parseFile( 'core.clj' );
 	caching = false;
+	experimentalPartial = true;
 
 	parseFile( 'scratch.clj' );
+
+
 
 //	console.log( env.write() );
 

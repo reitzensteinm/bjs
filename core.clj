@@ -197,14 +197,7 @@
   (quote {a 1 b 2})
   (zipmap (quote [a b]) [1 2]))
 
-(def inner-bind-expl*
-  (fn* args
-    ;; Bind to env is being weird!
-    (bind-to-env* (first args))))
-;        (inner-bind-exp* (assoc env (first syms) (first vals)
-;                           (rest syms) (rest vals)})))))
-
-(def data (msg* inner-bind-expl* [:disassemble]))
+(def data (msg* inner-bind-exp* [:disassemble]))
 
 ;; Optimize partially evalutes code, but stops at specified symbols
 ;; The code is read + written in order to prevent the unbound symbols
@@ -223,14 +216,10 @@
                                        eval-env)))))))
 
 
-:halt
-(peval (quote (bind-to-env* x)) {(quote x) (unbound (quote x))})
 
+;(peval (quote (bind-to-env* x)) {(quote x) (unbound (quote x))})
 
-
-(optimize data {(quote inner-bind-expl*) (unbound (quote inner-bind-expl*))})
-
-
+(optimize data {(quote inner-bind-exp*) (unbound (quote inner-bind-exp*))})
 
 (def inner-bind-exp* (apply* obj*
                        [(quote argfo) (quote envfo)
