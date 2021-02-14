@@ -447,7 +447,7 @@ inner-bind-ez*
 
 (let [x (unbound (quote x))
       y (+ x 1)]
-  (apply* fn* [x] {})))
+  (apply* fn* [x] {}))
 
 ;; Todo - partial? for lists
 
