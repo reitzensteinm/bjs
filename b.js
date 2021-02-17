@@ -1,9 +1,6 @@
 var fs = require( 'fs' );
 var crypto = require('crypto');
 
-
-var experimentalPartial = false;
-
 //const redis = require("redis");
 //const client = redis.createClient();
 
@@ -978,6 +975,18 @@ function md5( s ) {
 
 }
 
+var indent = 0;
+
+function ipush() {
+	indent++;
+}
+function ipop() {
+	indent--;
+}
+function log( s ) {
+	console.log( " ".repeat( indent ) + s );
+}
+
 function cacheVal( key, cf ) {
 
   if (!fs.existsSync("cache")){
@@ -1012,7 +1021,7 @@ function test( ){
 															buildPrim( "rest",  function ( e, a,b) { return a.rest(); }),
 															buildPrim( "assert", function ( e, a,b) { var r = eq( a, b ); if ( !r ) throw "exception"; return make( string, "pass " + r ); }),
 															buildPrim( "eval", function ( e, a,b) { return a.eval( b ); }),
-															buildPrim( "peval", function ( e, a,b) { var oldPartial = inPartial; inPartial = true; var res = a.eval( b ); inPartial = oldPartial; return read( res.pwrite() ); } ),
+															buildPrim( "peval", function ( e, a,b) { var oldPartial = inPartial; inPartial = true; var res = a.eval( b ); inPartial = oldPartial; return read( res.pwrite() ).eval( e ); } ),
 															buildPrim( "partialq", function ( e, a ) { return make( boolean, a.partial() ); }, [false] ),
 															[ make( symbol, "trace" ), make( trace, nil ) ],
 															buildPrim( "unbound", function (e, a ) { return make( unbound, a ); }  ),
@@ -1053,7 +1062,7 @@ function test( ){
 	}
 
 	var key = ignoreMods ? "" : fs.readFileSync( "b.js", 'utf8' );
-	var caching = false;
+	var caching = true;
 
 	function parseFile( path ) {
 
@@ -1110,8 +1119,9 @@ function test( ){
 	}
 
 	parseFile( 'core.clj' );
+	parseFile( 'partial.clj' );
 	caching = false;
-	experimentalPartial = true;
+
 
 	parseFile( 'scratch.clj' );
 

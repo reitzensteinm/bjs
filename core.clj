@@ -1,5 +1,8 @@
 ;; Bootstrap def, which just returns a map containing :defines
 ;; Strings and quote are not available, so (symbol :def) <=> 'def
+;; This monstrosity should probably be removed and replaced
+;; with the builtin from whence it came
+
 {:defines {(symbol :def)
            (obj* args env
              {:defines
@@ -7,19 +10,23 @@
                (eval (first (rest (rest args))) env)}})}}
 
 ;; obj* is a fexpr, which does not eval params or result implicitly
+
 (def quote (obj* args env
              (first (rest args))))
 
 ;; Assert assert works!
+
 (assert 5 (+ 1 4))
 
 ;; Check if, especially if arguments incomplete
+
 (assert 0 (if true 0 1))
 (assert 1 (if false 0 1))
 (assert nil (if false 1))
 
 ;; Bootstrap bare metal fn*, which evalutes its parameters in the calling
 ;; environment,
+
 (def fn* (obj* args env
            (obj* argf envf
              (eval (first (rest (rest args)))
@@ -30,6 +37,7 @@
   ((fn* args (+ (first args) (first (rest args)))) (+ 1 2) 2))
 
 ;; Helper functions for list access
+
 (def second (fn* args
               (first (rest (first args)))))
 
@@ -51,6 +59,7 @@
   (third [1 5 10]))
 
 ;; Equivalent to let, but can only bind one symbol at a time
+
 (def bind* (obj* args env
              (eval (third args)
                    (assoc env
@@ -71,6 +80,7 @@
 ;; bind-to-env* is a helper fn that appends a list of bindings to an
 ;; environment, evaluating the expressions in the caller environment
 ;; inner-bind* can later be overridden to enable destructuring
+
 (def inner-bind*
   (fn* args
     (assoc (first args) (second args) (third args))))
@@ -94,6 +104,7 @@
 
 ;; Final version of let using bind-to-env*. Destructuring is not yet
 ;; available, but bind-to-env* will be upgraded to enable it
+
 (def let (obj* args env
            (eval (third args)
                  (bind-to-env* (second args) env))))
@@ -105,12 +116,14 @@
     (+ x y)))
 
 ;; Testing the Trace system is working
+
 (assert
   14
   (let [x 12]
     (trace (+ x 2))))
 
 ;; Bootstrap cond from if
+
 (def cond (obj* args env
             (let [test (first (rest args))
                   res (second (rest args))]
@@ -179,6 +192,7 @@
         (dyn-test)))
 
 ;; We don't have or yet. Are you kidding me!?
+
 (def zipmap (fn* args
               (let [ks (first args)
                     vs (second args)]
@@ -202,6 +216,7 @@
 ;; Optimize partially evalutes code, but stops at specified symbols
 ;; The code is read + written in order to prevent the unbound symbols
 ;; impacting the compiled code
+
 (def optimize (fn* args
                 (let [d (first args)
                       env (first d)
@@ -216,8 +231,7 @@
                                        eval-env)))))))
 
 
-
-;(peval (quote (bind-to-env* x)) {(quote x) (unbound (quote x))})
+;; "Compiled" inner-bind-exp*, which partially evalutes its body with unspecified arguments
 
 (optimize data {(quote inner-bind-exp*) (unbound (quote inner-bind-exp*))})
 
@@ -238,6 +252,8 @@
         e [a b]]
     e))
 
+;; Destructuring allows us to implement fn, which can be seen as one line of let
+
 (def fn (obj* args env
            (obj* argf envf
              (eval (first (rest (rest args)))
@@ -247,6 +263,8 @@
   7
   ((fn [x] x) 7))
 
+;; Defn is a convenience function for (def sym (fn ...))
+;; The fact that we're now writing convenience functions is relieving.
 
 (def defn (obj* argf envf
             (let [[a b c d] argf]
