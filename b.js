@@ -1183,7 +1183,7 @@ function test( ){
 	}
 
 	var key = ignoreMods ? "" : fs.readFileSync( "b.js", 'utf8' );
-	var caching = false;//true;
+	var caching = true;
 
 	function parseFile( path ) {
 

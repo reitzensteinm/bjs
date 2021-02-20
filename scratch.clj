@@ -1,14 +1,42 @@
-
-;; Todo - robust tests for (partial?)
-
-;(fn [x] (fn [y] (+ x y)))
-;:halt
-
-;; Todo: Optimized closures don't capture parent scope for partially evaluated free variables - how can we fix?
+;; Todo: emit!
 
 
+:halt
 
-(optimize data {(quote inner-bind-exp*) (unbound (quote inner-bind-exp*))})
+(def c (msg* defn [:disassemble]))
+
+(def opt (optimize c {(quote argf) (unbound (quote argfo))
+                      (quote fn)  (unbound (quote fn))
+                      (quote envf) (unbound (quote envfo))}))
+
+opt
+
+(def do (apply* obj*
+                [(quote argfo) (quote envfo)
+                 opt]
+                {}))
+
+(do mx [x] (+ x 1))
+(mx 5)
+;(read (pwrite pp))
+
+:halt
+
+(def emit
+  (fn [expr path]
+    (if (provides? expr :sequence)
+      :seq)))
+
+
+
+:halt
+
+(msg* defn [:disassemble])
+;(optimize
+;          {})
+
+(emit (quote (+ x 1))
+      [])
 
 
 
