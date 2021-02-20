@@ -225,7 +225,7 @@
                       eval-env (assoc (assoc env (quote argf) (unbound (quote argfo)))
                                       (quote envf) (unbound (quote envfo)))]
 
-                  (read (write
+                  (read (pwrite
                           (dyn* stop-symbols
                                 (peval code
                                        eval-env)))))))

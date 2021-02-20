@@ -1,16 +1,86 @@
 
 ;; Todo - robust tests for (partial?)
 
-;(eval (quote (fn [x] (fn [y] (+ x y)))))
-;      {})
+;(fn [x] (fn [y] (+ x y)))
+;:halt
+
+;; Todo: Optimized closures don't capture parent scope for partially evaluated free variables - how can we fix?
+
+
+
+(optimize data {(quote inner-bind-exp*) (unbound (quote inner-bind-exp*))})
+
+
+
+:halt
+pexpr
+
+
+
+(def a (peval (fn* x x)
+              {}))
+
+(read (pwrite a))
+
+
+
+:halt
+
+(def c (obj*
+         argfo11
+         envfo11
+         (eval
+          (quote
+           (obj*
+            argfo12
+            envfo12
+            (eval
+             (quote
+              (+
+               (first (eval (rest argfo11) envfo11))
+               (first (eval (rest argfo12) envfo12))))
+             {(quote argfo12) argfo12, (quote envfo12) envfo12})))
+          {(quote argfo11) argfo11, (quote envfo11) envfo11})))
+
+((c 5) 6)
+
+:halt
+
+
+(def c (obj*
+         argfo11
+         envfo11
+         (eval
+          (quote
+           (obj*
+            argfo12
+            envfo12
+            (eval
+             (quote
+              (+
+               (first (eval (rest argfo11) envfo11))
+               (first (eval (rest argfo12) envfo12))))
+             {(quote argfo12) argfo12, (quote envfo12) envfo12})))
+          {(quote argfo11) argfo11, (quote envfo11) envfo11})))
+
+((c 5) 6)
+
+:halt
+
+(((fn [x] (fn [y] (+ x y)))
+  1)
+ 2)
+
+(fn [x] (fn [y] (+ x y)))
 
 (let [f (peval (quote (fn [x] x))
               {})]
-  f)
+  (peval f {}))
 
 (let [f (peval (quote (fn [x] (fn [y] (+ x y))))
-               {})]
-  f)
+               {})
+      pf (peval f {})]
+  ((pf 5) 1))
   ;((f 7) 5))
 ;(((obj* argf envf (obj* argf envf (+ (first (eval (rest argf) envf)) (first (eval (rest argf) envf)))));
 ;  1

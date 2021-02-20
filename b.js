@@ -41,7 +41,8 @@ const kwSequence = intern_keyword( "sequence" );
 const kwPartialWrite = intern_keyword( "partial-write" );
 
 function truthy( v ) {
-		return ( v != nil && !v.equals( make( boolean, false ) ).peek()  );
+	// I am so, so sorry for this temporary hack
+		return ( v != nil && ( v.write() != "false" ) );// !v.equals( make( boolean, false ) ).peek()  );
 }
 
 function eq( a, b, e ) {
@@ -217,6 +218,8 @@ function string( data, args, env ) {
 			return '"' + data + '"';
 		} else if ( eq( args, msgPartial, env ) ) {
 				return make( boolean, false );
+		} else if ( eq( args.first(), kwEquals, env ) ) {
+			return make( boolean, data == args.rest().first().write() );
 		}
 }
 
@@ -304,8 +307,11 @@ function hash_map( data, args, env ) {
 
 	} else if ( args.first() == kwEquals ) {
 
+
+
 		var allContained = true;
 		var otherMap = args.rest().first();
+
 		for ( var c = 0; c < data.length; c++ ) {
 			if ( !eq( otherMap.get( data[ c ][ 0 ] ), data[ c ][ 1 ] ) ) {
 				allContained = false;
@@ -315,12 +321,12 @@ function hash_map( data, args, env ) {
 	} else if ( eq( args, msgProvides, env ) ) {
 			return make( hash_map, [ [kwPartialWrite, kwPartialWrite ] ] );
 	} else if ( eq( args, msgPartial, env ) ) {
-
+		var rout = [];
 		for ( var c = 0; c < data.length; c++ )
-			if ( data[ c ][ 0 ].partial() || data[ c ][ 1 ].partial( ) ) {
-				return make( boolean, true );
+			for ( var x = 0; x <= 1; x++ ) {
+				rout.push( data[ c ][ x ]( msgPartial, env ) );
 			}
-		return make( boolean, false );
+			return mergePartials( rout );
 	} else if ( eq( args, msgPartialWrite, env ) ) {
 		var outs = "{";
 
@@ -407,6 +413,26 @@ function write_with( data, sep ) {
 
 }
 
+function mergePartials( lst ) {
+
+	var res = nil;
+	for ( var c = 0; c < lst.length; c++ ) {
+		if ( truthy( lst[ c ] ) ) {
+			if ( res == nil ) {
+				res = lst[ c ]
+			} else {
+				var d = lst[ c ].d;
+				for ( var x = 0; x < d.length; x++ ) {
+					res = res.assoc( d[ x ][ 0 ], d[ x ][ 1 ] );
+				}
+			}
+		}
+	}
+
+	return res;
+
+}
+
 function array_list( t, data, args, env ) {
 
 	if ( args == msgFirst ) {
@@ -420,10 +446,11 @@ function array_list( t, data, args, env ) {
 	} else if ( eq( args, msgProvides, env ) ) {
 			return make( hash_map, [ [ kwSequence, kwSequence ], [ kwPartialWrite, kwPartialWrite ] ] );
 	} else if ( eq( args, msgPartial, env ) ) {
+			var res = [];
 			for ( var c = 0; c < data.length; c++ )
-				if ( data[ c ].partial() )
-					return make( boolean, true );
-			return make( boolean, false );
+				res.push( data[ c ]( msgPartial, env  ) );
+			return mergePartials( res );
+
 	}
 	return null;
 
@@ -596,6 +623,8 @@ function if_ (data, args, env ) {
 
 function prim( data, args, env ) {
 
+	//console.log( "applying prim: " + args.write() + " " + inPartial );
+
 	if ( args == msgEval ) {
 		return make( prim, data );
 	} else if ( args == msgWrite ) {
@@ -610,9 +639,11 @@ function prim( data, args, env ) {
 
 		var anyUnbound = false;
 
+		ipush();
+		log( "Primitive unbound eval " + data.primName );
 		for ( var c = 1; c < nargs.length; c++ ) {
 			var ev = nargs[ c ].eval( env );
-//			console.log( nargs[ c ].write() + ev.write() + " " + ev.partial( ) + " " + ev.f.name );
+			log( nargs[ c ].write() + " " + ev.write() + " " + ev.partial( ) + " " + ev.f.name + " " + nargs[ c ].f.name );
 			if ( ev.partial() ) {
 
 
@@ -636,14 +667,17 @@ function prim( data, args, env ) {
 			cargs.push( ev );
 		}
 
-//		console.log( "ip " + inPartial + " " + anyUnbound );
+		ipop();
+		//console.log( "ip " + inPartial + " " + anyUnbound );
 
 		if ( anyUnbound && inPartial ) {
 			for ( var c = 0; c < partial.length; c++ ) {
-				partial [c ] = stripPartial( partial[ c] );
+//				partial [c ] = stripPartial( partial[ c] );
 			}
 			return make( unbound, make( code, partial ) );
 		}
+
+
 
 		return data.apply( null, cargs );
 
@@ -681,7 +715,11 @@ function obj( data, args, env ) {
 	if ( args == msgWrite ) {
 		return "obj*";// make( string, "fn*");
 	} else if ( args.first() == kwApply ) {
-		return make( closure, make( vec, [ env, args.rest().first(), args.rest().rest().first(), args.rest().rest().rest().first() ] ) );
+		var r = make( closure, make( vec, [ env, args.rest().first(), args.rest().rest().first(), args.rest().rest().rest().first() ] ) );
+		if ( inPartial ) {
+			r = r.eval( env );
+		}
+		return r;
 	} else if ( eq( args, msgPartial, env ) ) {
 			return make( boolean, false );
 	} else if ( eq( args, msgProvides, env ) ) {
@@ -695,7 +733,10 @@ function unbound( data, args, env ) {
 	if ( args == msgEval ) {
 		return make( unbound, data );
 	} else if ( args == msgWrite ) {
-		return "(par* " + data.write() + ")";
+		if ( inPartial )
+			return data.write();
+		else
+			return "(par* " + data.write() + ")";
 	} else if ( args.first() == kwApply ) {
 		var ar = args.rest().eval(env);
 		for ( var c = 0; c < ar.d.length; c++ ) {
@@ -703,7 +744,11 @@ function unbound( data, args, env ) {
 		}
 		return make( unbound, make( code, concat( make( code, [data] ), ar ).d ) );
 	} else if ( eq( args, msgPartial, env ) ) {
-			return make( boolean, true );
+			if ( data.f == symbol )
+				return make( hash_map, [ [ data, data ] ] ); // make( boolean, true );
+			else {
+				return data( msgPartial, env );
+			}
 	} else if ( eq( args, msgProvides, env ) ) {
 		return make( hash_map, [ [kwPartialWrite, kwPartialWrite ] ] );
 	} else if ( eq( args, msgPartialWrite, env ) ) {
@@ -733,7 +778,77 @@ function quote( d ) {
 	return make( code, [ make( symbol, "quote" ), d ] );
 }
 
+var sc = 0;
+
 function closure( data, args, env ) {
+
+	if ( eq( args.first(), kwEval ) ) {
+
+		ipush();
+		log( "In partial eval! " + data.write() );
+
+		var [ cenv, cargn, cenvn, cbody ] = data.destructure();
+		var na = make( symbol, "clo*" );
+
+		var argfo = make( symbol, "argfo" + sc );
+		var envfo = make( symbol, "envfo" + sc );
+
+		sc++;
+		var nenv =  cenv; //read( cenv.pwrite() );
+		nenv = nenv.assoc( cargn, make( unbound, argfo ) );
+		nenv = nenv.assoc( cenvn , make( unbound, envfo ) );
+
+		var empty = make( hash_map, [] );
+
+		var body = cbody.eval( nenv ); //make( code, [ make( symbol, "eval" ), quote( cbody ), nenv ] );
+
+
+		//log( env.write() );
+		//log( cenv.write() );
+		var partials = cenv( msgPartial, empty );
+
+
+		var partialEnv = make( hash_map, [] );
+
+		if ( truthy( partials ) ) {
+			var arr = [];
+			for ( var c =0 ; c < partials.d.length; c++ ) {
+				var p = partials.d[ c ][ 0 ];
+
+				arr.push( [ p, make( unbound, p ) ] );
+				//arr.push(  partials.d[ c ][ 0 ], make( unbound, partials.d[ c ][ 0 ] ) );
+			}
+
+			partialEnv = make( hash_map, arr );
+		}
+//		log( "penv: " + partialEnv.write( ) );
+
+	//	log( nenv.write() );
+		//log( cbody.write() );
+		//log( body.write() );// read( body.pwrite() ).write() );
+
+		var newbody = read( body.pwrite() );
+
+
+		var penv = make( hash_map, [ [ argfo, argfo ], [ envfo, argfo ]]);
+
+	/*
+		console.log( "***" );
+		console.log( cenv.pwrite() );
+		console.log( "******" );
+		console.log( make( hash_map, [] ).write() );
+		console.log( "**");
+	*/
+
+		var res =  make( closure, make( vec, [ partialEnv, argfo, envfo, newbody ] ) );
+
+		log( res.write() );
+		log( res.pwrite() );
+		ipop();
+		//console.log(  make( vec, [ na, cenv, cargn, cenvn, cbody ] ).write() );
+		return res; //, make( vec, [ na, cenv, cargn, cenvn, cbody ] ) );
+
+	}
 
 	if ( eq( args, msgDisassemble, env ) ) {
 		return data;
@@ -744,6 +859,8 @@ function closure( data, args, env ) {
 			//return make( boolean, cenv.partial() );
 
 	} else if ( eq( args, msgPartialWrite, env ) ) {
+
+		//log( "Partial write" + make( closure, data ).write() );
 
 		var [ cenv, cargn, cenvn, cbody ] = data.destructure();
 		var na = make( symbol, "obj*" );
@@ -907,6 +1024,9 @@ function read_toks( toks ) {
 		if ( eq( c.first(), make( symbol, "clo*" ) ) ) {
 			//console.log( "reading closure!" );
 			return make( closure, c.rest() );
+		} else if ( eq( c.first(), make( symbol, "par*" ) ) ) {
+
+			return make( unbound, c.rest().first() );
 		} else {
 			return c;
 		}
@@ -984,7 +1104,7 @@ function ipop() {
 	indent--;
 }
 function log( s ) {
-	console.log( " ".repeat( indent ) + s );
+	//console.log( " ".repeat( indent ) + s );
 }
 
 function cacheVal( key, cf ) {
@@ -1021,12 +1141,13 @@ function test( ){
 															buildPrim( "rest",  function ( e, a,b) { return a.rest(); }),
 															buildPrim( "assert", function ( e, a,b) { var r = eq( a, b ); if ( !r ) throw "exception"; return make( string, "pass " + r ); }),
 															buildPrim( "eval", function ( e, a,b) { return a.eval( b ); }),
-															buildPrim( "peval", function ( e, a,b) { var oldPartial = inPartial; inPartial = true; var res = a.eval( b ); inPartial = oldPartial; return read( res.pwrite() ).eval( e ); } ),
+															buildPrim( "peval", function ( e, a,b) { var oldPartial = inPartial; inPartial = true; var res = a.eval( b ); /*console.log( "rw : " + res.pwrite() );*/ inPartial = oldPartial; return res; if ( res.f == closure ) return res; return read( res.pwrite() ).eval( e ); } ),
 															buildPrim( "partialq", function ( e, a ) { return make( boolean, a.partial() ); }, [false] ),
 															[ make( symbol, "trace" ), make( trace, nil ) ],
 															buildPrim( "unbound", function (e, a ) { return make( unbound, a ); }  ),
 															buildPrim( "read", function (e, a ) { /*console.log( "reading: " + a.d );*/ return read( a.d ); }, [false]),
 															buildPrim( "write", function (e, a ) { return make( string, a.write() ); }, [false]  ),
+															buildPrim( "pwrite", function (e, a ) { var oldPartial = inPartial; inPartial = true; var res = make( string, a.pwrite() ); inPartial = oldPartial; return res; }, [false]  ),
 															[ make( symbol, "dyn*" ),  make( dynamic, nil ) ],
 															[ make( symbol, "true" ), make( boolean, true ) ],
 															[ make( symbol, "false" ), make( boolean, false ) ],
@@ -1062,7 +1183,7 @@ function test( ){
 	}
 
 	var key = ignoreMods ? "" : fs.readFileSync( "b.js", 'utf8' );
-	var caching = true;
+	var caching = false;//true;
 
 	function parseFile( path ) {
 
@@ -1087,8 +1208,10 @@ function test( ){
 
 				var res = read( cres );
 
-				if ( executed )
-					console.log( "Got " + res.write() );
+				if ( executed ) {
+					console.log( "Got " + cres  );
+
+				}
 
 				if ( res.write().startsWith( "{" ) ) {
 					var defs = res.get( make( symbol, "defines"));
@@ -1119,6 +1242,7 @@ function test( ){
 	}
 
 	parseFile( 'core.clj' );
+
 	parseFile( 'partial.clj' );
 	caching = false;
 
