@@ -1,12 +1,6 @@
 var fs = require( 'fs' );
 var crypto = require('crypto');
 
-//const redis = require("redis");
-//const client = redis.createClient();
-
-//console.log( client.set( "hi", "asdf" ) );
-//console.log( client.get( 'hi' ) );
-
 const keywords = {};
 
 var inPartial = false;
