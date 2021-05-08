@@ -44,7 +44,7 @@ The current limit for this is a single 1000 line file, although this should be r
 
 The Clojurelike1 code builds up abstractions as it boots. Binding can initially bind only one symbol to one value. Early functions and macros can have only one parameter. Destructuring is added, eg (let [[x & r] my-list]), as well as multi let, eg (let [x 1 y (+ x 1)]).
 
-Eventually, the Clojurelike code implements its own persistent data structures, for lists, sets and hash maps.
+Eventually, the Clojurelike code implements its own persistent data structures, for lists, sets and hash maps, which are then optimized and compiled down to the host language, replacing the defaults.
 
 Having the Clojurelike code modify the execution semantics is a current area of experimentation for this project. It has been accomplished previously, eg Amin-Rompf-2019.
 
@@ -66,7 +66,7 @@ A protocol exists to represent the value of an unbound symbol. It can be passed 
 
 When a program attempts to use the unbound value, instead of a result being returned, code is returned. This code will return the expected result once the unbound variable is bound.
 
-For example,
+For example:
 
 ```
 (eval '(+ x (+ 1 2)) {'x 2})
@@ -110,3 +110,11 @@ This technique was sufficient to replicate the GraalVM party trick of partially 
 #### Assembly (WIP)
 
 A high level assembly language, functionally a restricted version of let bindings, will be developed in order to allow for easy JIT code generation. Compiling this form to the machine's representation is likely to be written in the Clojurelike itself, as partial evaluation is sufficient to provide usable, interpreter level performance.
+
+References:
+
+```
+https://en.wikipedia.org/wiki/Partial_evaluation
+https://www.cs.purdue.edu/homes/rompf/papers/amin-popl18.pdf
+https://web.cs.wpi.edu/~jshutt/kernel.html
+```
