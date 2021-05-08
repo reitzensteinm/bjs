@@ -97,14 +97,15 @@ Branches which were only taken in one direction, where fuzzing the input was una
 
 This is highly dangerous, but effective. An area of research is to determine whether it's possible to mitigate the downsides, for instance to provide tooling where the compiler can be informed of values that the fuzzer has missed.
 
-This technique was sufficient to replicate the GraalVM party trick of partially evaluating away a sort to build clamp, to transform the first high level definition of clamp in to the second low level implementation, completely eliding the quicksort at runtime. The branches seen in the optimized version are specialized inlined code pulled out of the definition of quicksort.
+This technique was sufficient to replicate the GraalVM party trick of partially evaluating away a sort to build clamp, to transform the first high level definition of clamp in to the second low level implementation, completely eliding the quicksort at runtime. The branches seen in the optimized version are a specialized and inlined version of quicksort, eliding branches never taken.
 
+```
 (fn clamp [x low high]
   (nth (quicksort [x low high]) 1))
 =>
 (fn clamp [x low high]
   (if (< x low) low (if (< high x) high x))
-
+```
 
 #### Assembly (WIP)
 
