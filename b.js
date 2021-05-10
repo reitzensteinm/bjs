@@ -391,7 +391,7 @@ function write_with( data, sep ) {
 
 	}
 
-} catch {
+} catch (err) {
 	for ( var c = 0; c < data.length; c++ ) {
 
 		console.log( "d " + data[ c ] +  " " + typeof( data[ c ] ) );
