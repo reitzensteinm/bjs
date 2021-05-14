@@ -24,9 +24,9 @@ Closures have access to whatever data they've closed over, the message they're b
 
 Function calls do not pre evaluate arguments passed, but they've got the information required to selectively evaluate them. In this way, closures effectively act as fexprs. Macros and standard functions are both built out of this construct. They're bootstrapped from within the language itself.
 
-Kernel is a dialect of Scheme that also makes macros first class. It provides *wrap* and *unwrap* semantics, allowing you to set whether a function should automatically evaluate its arguments (i.e. fn vs macro calling). Here, you can use messages to get whatever behaviour you're after, i.e. (msg* my-fn [:apply 1 2]).
-
 This evaluation strategy means that macros are first class, and are executed at runtime, not compile time. This enables operations such as (reduce or my-list) and unlocks a significant amount of dynamic flexibility when writing macros. Let in particular is nasty in Clojure, but trivial here. It is however *extremely* slow.
+
+Kernel is a dialect of Scheme that also makes macros first class. It provides *wrap* and *unwrap* semantics, allowing you to set whether a function should automatically evaluate its arguments (i.e. fn vs macro calling). Here, you can use messages to get whatever behaviour you're after, i.e. (msg* my-fn [:apply 1 2]).
 
 #### Bootstrapped
 
