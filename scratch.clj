@@ -1,6 +1,55 @@
 ;; Todo: emit!
 
 
+
+
+;(if (empty? a) {} (if (empty? b) {} (assoc (zipmap (rest a) (rest b)) (first a) (first b))))
+
+;(zipmap [1 2 3] [4 5 6])
+(reduce2 + 0 [0 1 2 3 4 5 6 7 8 9 10])
+
+:halt
+
+(let [zm zipmap]
+  (realize (dyn* {(quote zipmap) (unbound (quote zipmap))}
+             (peval (quote (zm a b)) {(quote zm) zm (quote a) (unbound (quote a)) (quote b) (unbound (quote b))}))))
+
+;(realize (peval (quote (plus x y)) {(quote x) (unbound (quote x)) (quote y) (unbound (quote y))}))
+
+:halt
+
+(mark reduce)
+(reduce reduce-f 0 [1 2 3 4 5 6])
+
+:halt
+
+(optimize (msg* zipmap [:disassemble]) {(quote zipmap) (unbound (quote zipmap))})
+:halt
+
+(defn emit [expr]
+  expr)
+
+
+(emit (quote (+ (first args) 1)))
+
+
+:halt
+
+(peval (quote (= x (quote &)))
+       {(quote x) (unbound (quote x))})
+
+(realize
+  (peval (quote (= x (quote &)))
+         {(quote x) (unbound (quote x))}))
+
+;
+; (defn simple-func [x]
+;   (= x (quote &)))
+;
+; (optimize (msg* simple-func [:disassemble])
+;           {})
+
+
 :halt
 
 (def c (msg* defn [:disassemble]))
@@ -8,6 +57,8 @@
 (def opt (optimize c {(quote argf) (unbound (quote argfo))
                       (quote fn)  (unbound (quote fn))
                       (quote envf) (unbound (quote envfo))}))
+
+:halt
 
 opt
 

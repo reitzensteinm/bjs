@@ -158,20 +158,26 @@
 ;; Enable [sym sym] => [val val]
 
 (def inner-bind-exp*
-  (fn* args
-    (let [env (first args)
-          syms (second args)
-          vals (third args)]
-      (cond
-        (not (provides? syms :sequence))
-        (assoc env syms vals)
+  ;(let [inner-bind inner-bind*]
+    (fn* args
+      ;(dyn* {(quote inner-bind*) inner-bind}
+        (let [env (first args)
+              syms (second args)
+              vals (third args)]
+          (cond
+            (not (provides? syms :sequence))
+            (assoc env syms vals)
 
-        (empty? syms)
-        env
+            (empty? syms)
+            env
 
-        :default
-        (inner-bind-exp* (assoc env (first syms) (first vals))
-                         (rest syms) (rest vals))))))
+            (= (first syms) (quote &))
+            (assoc env (first (rest syms))
+                       vals)
+
+            :default
+            (inner-bind-exp* (assoc env (first syms) (first vals))
+                             (rest syms) (rest vals))))))
 
 (assert
   (quote {a 1 b 2 c 3})
@@ -181,8 +187,13 @@
   (quote {a 1})
   (inner-bind-exp* {} (quote a) 1))
 
+; (assert
+;   (quote {x 1
+;           r [2 3 4]})
+;   (inner-bind-exp* {} (quote [x & r]) [1 2 3 4]))
+
 (def realize (fn* args
-               (read (write (first args)))))
+               (read (pwrite (first args)))))
 
 (def dyn-test (fn* args dyn-bound))
 
@@ -256,8 +267,11 @@
 
 (def fn (obj* args env
            (obj* argf envf
+             ; (let [code (first (rest (rest args)))
+             ;       call-env (inner-bind* env (first (rest args)) (eval (rest argf) envf))]
+             ;   (eval code call-env)))))
              (eval (first (rest (rest args)))
-               (inner-bind* env (first (rest args)) (eval (rest argf) envf))))))
+              (inner-bind* env (first (rest args)) (eval (rest argf) envf))))))
 
 (assert
   7

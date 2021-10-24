@@ -1,11 +1,13 @@
+
 (def test-unbound
   (obj* argf envf
     (let [expr (second argf)
           partial-expr (peval expr
-                              {(quote x) (unbound (quote x))})]
-      [(eval expr {(quote x) 1})
-       (eval partial-expr {(quote x) 1})
-       partial-expr])))
+                              {(quote x) (unbound (quote x))})
+          partial-expr (realize partial-expr)]
+
+      (assert (eval expr {(quote x) 1})
+              (eval partial-expr {(quote x) 1})))))
 
 
 (test-unbound
@@ -28,7 +30,6 @@
 (assert
   [5 3]
   ((a 5) 3))
-
 
 
 

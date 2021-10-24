@@ -86,7 +86,7 @@ function make( f, d ) {
 
 	var mp = function clo ( args, env ) {
 						clc++;
-						call_stack.push( [f.name,args] );
+						call_stack.push( [f.name,args,env] );
 
 						try{
 							var ret = f( d, args, env );
@@ -110,7 +110,8 @@ function make( f, d ) {
 								console.log( args == msgFirst );
 								console.log( mp.write() );
 								for ( var c = 0; c < call_stack.length; c++ ) {
-									console.log( call_stack[ c ][ 0 ] + " " + call_stack[ c ][ 1 ].write() );
+									ew = call_stack[ c ][ 2 ];
+									console.log( call_stack[ c ][ 0 ] + " " + call_stack[ c ][ 1 ].write() + " " + ( ew != null ? ew.write() : "null" ) );
 								}
 								console.log( "***" );
 								process.exit();
@@ -147,7 +148,7 @@ function make( f, d ) {
 	mp.pwrite = function( e ) {
 
 		//console.log( "Starting partial write " + f.name );
-		if ( f == closure ||  mp( msgProvides ).get( kwPartialWrite ) != nil ) {
+		if ( f == closure || mp( msgProvides ).get( kwPartialWrite ) != nil ) {
 //			console.log( "blah ") ;
 			var res = mp( msgPartialWrite, e );
 	//		console.log( "provided: " + res );
@@ -654,10 +655,16 @@ function prim( data, args, env ) {
 					//console.log( "normal unbound" );
 				}
 
+				partial.push(ev);
+			} else {
+				if  ( ev.f == symbol)  {
+					partial.push(quote(ev));
+				} else {
+					partial.push(ev);
+				}
 
 			}
 
-			partial.push( ev );
 			cargs.push( ev );
 		}
 
@@ -775,6 +782,8 @@ function quote( d ) {
 var sc = 0;
 
 function closure( data, args, env ) {
+
+
 
 	if ( eq( args.first(), kwEval ) ) {
 
@@ -914,6 +923,14 @@ function closure( data, args, env ) {
 		return make( code, [ na, cenv, cargn, cenvn, cbody ] ).write();
 
 	} else {
+
+		if (data.mark) {
+			console.log( "Closure " );
+			console.log( data.write() );
+			console.log( args.write() );
+			console.log( env.write() );
+		}
+
 
 		var [ cenv, cargn, cenvn, cbody ] = data.destructure();
 		//console.log( data.write() + " " + args.write() +  " " + args.partial() + " " + args.rest().first().partial() + " " + env.write() );
@@ -1121,6 +1138,27 @@ function cacheVal( key, cf ) {
 
 }
 
+//;(if (empty? a) {} (if (empty? b) {} (assoc (zipmap (rest a) (rest b)) (first a) (first b))))
+
+function zipmap( a, b ) {
+	if ( truthy( a.empty() ) ) {
+		return make( hash_map, [] );
+	} else {
+			if ( truthy( b.empty() ) ) {
+					return make( hash_map, [] );
+			} else {
+					return zipmap( a.rest(), b.rest() ).assoc( a.first(), b.first() );
+			}
+	}
+}
+
+function reduce( f, i, s ) {
+		if ( truthy( s.empty() ) ) {
+			return i;
+		} else {
+			return reduce( f, f( make( vec, [ kwApply, i, s.first() ] ), make( vec, [] ) ), s.rest() );
+		}
+}
 
 
 function test( ){
@@ -1129,14 +1167,18 @@ function test( ){
 
 	primEnv = make( hash_map, [
 															buildPrim( "+", function ( e, a,b) { return make( integer, a.peek() + b.peek() ); }),
+															buildPrim( "concat", function ( e, a,b) { return concat(a,b); } ),
 															[ make( symbol, "obj*" ), make( obj, nil ) ],
 															[ make( symbol, "clo*" ), make( closureRead, nil ) ],
 															buildPrim( "first",  function ( e, a,b) { return a.first(); }, [ true ] ),
 															buildPrim( "rest",  function ( e, a,b) { return a.rest(); }),
 															buildPrim( "assert", function ( e, a,b) { var r = eq( a, b ); if ( !r ) throw "exception"; return make( string, "pass " + r ); }),
+															buildPrim( "zipmap2", function ( e, a,b) { return zipmap( a, b); }),
+															buildPrim( "reduce2", function ( e, a,b, c) { return reduce( a, b, c ); }),
 															buildPrim( "eval", function ( e, a,b) { return a.eval( b ); }),
 															buildPrim( "peval", function ( e, a,b) { var oldPartial = inPartial; inPartial = true; var res = a.eval( b ); /*console.log( "rw : " + res.pwrite() );*/ inPartial = oldPartial; return res; if ( res.f == closure ) return res; return read( res.pwrite() ).eval( e ); } ),
 															buildPrim( "partialq", function ( e, a ) { return make( boolean, a.partial() ); }, [false] ),
+															buildPrim( "mark", function (e, a ) { a.d.mark = true;  return make( boolean, true ); } ),
 															[ make( symbol, "trace" ), make( trace, nil ) ],
 															buildPrim( "unbound", function (e, a ) { return make( unbound, a ); }  ),
 															buildPrim( "read", function (e, a ) { /*console.log( "reading: " + a.d );*/ return read( a.d ); }, [false]),
@@ -1238,6 +1280,7 @@ function test( ){
 	parseFile( 'core.clj' );
 
 	parseFile( 'partial.clj' );
+	parseFile( 'lib.clj' );
 	caching = false;
 
 
