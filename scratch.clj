@@ -1,12 +1,134 @@
 ;; Todo: emit!
 
+; Got "cond( make( vec, [ kwApply, seq.empty(), nil( make( vec, [ kwApply,  ] ), make( vec, [] ) ), (rest seq).empty(), (first seq)( make( vec, [ kwApply,  ] ), make( vec, [] ) ), true, concat((first seq)( make( vec, [ kwApply, sep ] ), make( vec, [] ) ), interpose(sep, seq.rest())) ] ), make( vec, [] ) )"
+; Executed 6057268434 calls
+;
+; real    25m26.857s
+; user    27m38.172s
+; sys     2m9.359s
 
+;(get {(quote a) nil} (quote b) :not-found)
+
+;:halt
+
+(def body
+  (quote (if (empty? s)
+           i
+           (reduce f
+                   (f i (first s))
+                   (rest s)))))
+
+(def interpose-body
+  (quote
+    (if (empty? (rest seq))
+      seq
+      (concat [(first seq) sep] (interpose sep (rest seq))))))
+
+(def map-body
+  (quote
+    (if (empty? l)
+      []
+      (concat [(f (first l))]
+              (map f (rest l))))))
+
+(def short-body
+  (quote (f (first l))))
+
+(def shortcuts
+  {(quote empty?) "empty"
+   (quote first) "first"
+   (quote rest) "rest"})
+
+(def functions
+  {(quote reduce) "reduce"
+   (quote interpose) "interpose"
+   (quote map) "map"
+   (quote concat) "concat"})
+
+; (def provides? (fn* args
+;                  (let [obj (first args)
+;                        interface (second args)
+;                        abilities (msg* obj [:provides])]
+;                    (not (= nil (get abilities interface))))))
+
+(def provides-body (quote (let [obj (first args)
+                                interface (second args)
+                                abilities (msg* obj [:provides])]
+                            (not (= nil (get abilities interface))))))
+
+
+
+
+(defn emit [expr]
+  (trace
+    (cond
+      (and (provides? expr :sequence)
+           (= (first expr) (quote if)))
+      (str "truthy( " (emit (second expr)) " ) ? " (emit (third expr)) " : " (emit (fourth expr)))
+
+      (and (provides? expr :sequence)
+           (get shortcuts (first expr)))
+      (str (emit (second expr)) "." (get shortcuts (first expr)) "()")
+
+      (and (provides? expr :sequence)
+           (get functions (first expr)))
+      (str (get functions (first expr))
+           "("
+           (apply* str (interpose2 ", " (map2 emit (rest expr)))
+                       {})
+           ")")
+
+      (provides? expr :code)
+      (str "glob( '" (first expr) "' )"
+           "( make( vec, [ kwApply, "
+           (apply* str (interpose2  ", " (map2 emit (rest expr)))
+                       {})
+           " ] ), make( hash_map, [] ) )")
+
+      (provides? expr :sequence)
+      (str
+        "make( vec, [ "
+        (apply* str (interpose2 ", " (map2 emit expr))
+                    {})
+        " ] )")
+
+      true (str expr))))
+
+(memoize emit)
+
+
+(emit (realize (peval provides-body {(quote args) (unbound (quote args))})))
+(realize (peval provides-body {(quote args) (unbound (quote args))}))
+
+:halt
+
+;(map emit [1 2 3])
+;(provides? short-body :sequence)
+;(provides? short-body :code)
+;(emit map-body)
+
+(emit interpose-body)
+;(map2 (partial + 1) [1 2 3])
+;(str "a" "b" (apply* str [1 2 3] {}) "c")
+
+:halt
+(let [a 4]
+  (reduce2 + 0 [a 1 2 3 4 5 6 7 8 9 10]))
+
+:halt
+(let [r reduce]
+  (realize (dyn* {(quote reduce) (unbound (quote reduce))}
+             (peval (quote (r f i s))
+                    {(quote r) r
+                     (quote f) (unbound (quote f))
+                     (quote i) (unbound (quote i))
+                     (quote s) (unbound (quote s))}))))
 
 
 ;(if (empty? a) {} (if (empty? b) {} (assoc (zipmap (rest a) (rest b)) (first a) (first b))))
 
 ;(zipmap [1 2 3] [4 5 6])
-(reduce2 + 0 [0 1 2 3 4 5 6 7 8 9 10])
+
 
 :halt
 
@@ -76,7 +198,7 @@ opt
 (def emit
   (fn [expr path]
     (if (provides? expr :sequence)
-      :seq)))
+      :)))
 
 
 

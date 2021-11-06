@@ -41,3 +41,51 @@
 
 (defn plus [a b]
   (+ a b))
+
+
+(defn str [& args]
+  (if (empty? args)
+    ""
+    (strcat
+      (str* (first args))
+      (apply* str (rest args) {}))))
+
+(def and (obj* args env
+           (if (eval (second args) env)
+             (if (eval (third args) env)
+               true
+               false)
+             false)))
+
+(assert true
+  (and true true))
+
+(assert false
+  (and false true))
+
+(def or (obj* args env
+          (if (eval (second args) env)
+            true
+            (if (eval (third args) env)
+              true
+              false))))
+
+(assert true
+  (or true false))
+
+(assert false
+  (or false false))
+
+(defn interpose [sep seq]
+  (cond
+    (empty? seq)
+    []
+
+    (empty? (rest seq))
+    [(first seq)]
+
+    true
+    (concat [(first seq) sep] (interpose sep (rest seq)))))
+
+(assert [1 0 1]
+  (interpose 0 [1 1]))

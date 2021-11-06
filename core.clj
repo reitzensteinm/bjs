@@ -263,6 +263,8 @@
         e [a b]]
     e))
 
+;; Todo: This let bind does not work with [[a b c d ] []], a => nil
+
 ;; Destructuring allows us to implement fn, which can be seen as one line of let
 
 (def fn (obj* args env
